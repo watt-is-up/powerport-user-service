@@ -1,3 +1,5 @@
+using UserService.Application.Providers.RegisterProvider;
+using UserService.Infrastructure;
 
 namespace UserService.Api
 {
@@ -7,16 +9,19 @@ namespace UserService.Api
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Add services to the container.
-
             builder.Services.AddControllers();
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
 
+            // Options
+            builder.Services.Configure<ProvisioningOptions>(builder.Configuration.GetSection("Provisioning"));
+
+            // Clean architecture wiring
+            builder.Services.AddInfrastructure(builder.Configuration);
+            builder.Services.AddScoped<IProviderProvisioningService, ProviderProvisioningService>();
+
             var app = builder.Build();
 
-            // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -25,8 +30,8 @@ namespace UserService.Api
 
             app.UseHttpsRedirection();
 
+            // MVP: no auth wired yet (you can add JWT auth later)
             app.UseAuthorization();
-
 
             app.MapControllers();
 
