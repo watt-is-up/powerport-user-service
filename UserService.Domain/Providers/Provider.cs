@@ -2,22 +2,29 @@ namespace UserService.Domain.Providers;
 
 public sealed class Provider
 {
-    public string ProviderId { get; }
+    public string UniqueName { get; }
     public string DisplayName { get; }
+    public string ProviderEmail { get; }
+    public Guid TenantId { get; }
     public DateTimeOffset CreatedAt { get; }
 
-    public Provider(string providerId, string displayName)
+    public Provider(string uniqueName, string displayName, string providerEmail, Guid tenantId)
     {
-        ProviderId = (providerId ?? "").Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(ProviderId))
-            throw new ArgumentException("providerId is required", nameof(providerId));
-        if (ProviderId.Length < 2)
-            throw new ArgumentException("providerId too short", nameof(providerId));
+        UniqueName = (uniqueName ?? "").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(UniqueName))
+            throw new ArgumentException("uniqueName is required", nameof(uniqueName));
+        if (UniqueName.Length < 2)
+            throw new ArgumentException("uniqueName too short", nameof(uniqueName));
 
         DisplayName = (displayName ?? "").Trim();
         if (string.IsNullOrWhiteSpace(DisplayName))
             throw new ArgumentException("displayName is required", nameof(displayName));
 
+        ProviderEmail = (providerEmail ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(ProviderEmail))
+            throw new ArgumentException("providerEmail is required", nameof(providerEmail));
+
+        TenantId = tenantId; // <-- YOU WERE MISSING THIS
         CreatedAt = DateTimeOffset.UtcNow;
     }
 }

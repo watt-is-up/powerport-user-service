@@ -17,7 +17,8 @@ public sealed class KeycloakOptions
 
     // Role + attribute conventions
     public string ProviderRoleName { get; set; } = "Provider";
-    public string ProviderIdAttributeName { get; set; } = "provider_id";
+    public string TenantIdAttributeName { get; set; } = "tenantId";
+
 
     // Enforce change password on first login
     public bool ForcePasswordUpdateOnFirstLogin { get; set; } = true;

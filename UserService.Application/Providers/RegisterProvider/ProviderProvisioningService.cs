@@ -10,24 +10,16 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
 {
     private readonly IProviderRepository _providers;
     private readonly IKeycloakProvisioningClient _keycloak;
-    private readonly IEventPublisher _events; // <-- changed from ITenantEventPublisher
+    private readonly ITenantInfraProvisioner _infra;
+    private readonly IEventPublisher _events;
     private readonly IHostEnvironment _env;
     private readonly ProvisioningOptions _opts;
-    private readonly KafkaOptions _kafka;     // <-- to read topic name
-
-    // Keep if you truly need optional service provisioning (you can remove later)
-    private static readonly string[] TenantServices =
-    [
-        "billing",
-        "stationmgmt",
-        "provider",
-        "tracking",
-        "reviews"
-    ];
+    private readonly KafkaOptions _kafka;
 
     public ProviderProvisioningService(
         IProviderRepository providers,
         IKeycloakProvisioningClient keycloak,
+        ITenantInfraProvisioner infra,
         IEventPublisher events,
         IHostEnvironment env,
         IOptions<ProvisioningOptions> opts,
@@ -35,6 +27,7 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
     {
         _providers = providers;
         _keycloak = keycloak;
+        _infra = infra;
         _events = events;
         _env = env;
         _opts = opts.Value;
@@ -43,77 +36,77 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
 
     public async Task<RegisterProviderResult> RegisterProviderAsync(RegisterProviderRequest request, CancellationToken ct)
     {
-        var providerId = (request.ProviderId ?? "").Trim().ToLowerInvariant();
+        var uniqueName = (request.UniqueName ?? "").Trim().ToLowerInvariant();
         var displayName = (request.DisplayName ?? "").Trim();
+        var providerEmail = (request.ProviderEmail ?? "").Trim();
 
-        if (string.IsNullOrWhiteSpace(providerId))
-            throw new ArgumentException("providerId is required");
-        if (string.IsNullOrWhiteSpace(displayName))
-            throw new ArgumentException("displayName is required");
+        if (string.IsNullOrWhiteSpace(uniqueName)) throw new ArgumentException("uniqueName is required");
+        if (string.IsNullOrWhiteSpace(displayName)) throw new ArgumentException("displayName is required");
+        if (string.IsNullOrWhiteSpace(providerEmail)) throw new ArgumentException("providerEmail is required");
 
-        if (await _providers.ExistsAsync(providerId, ct))
-            throw new InvalidOperationException($"Provider '{providerId}' already exists.");
+        if (await _providers.ExistsAsync(uniqueName, ct))
+            throw new InvalidOperationException($"Provider '{uniqueName}' already exists.");
 
-        var provider = new Provider(providerId, displayName);
+        var tenantId = Guid.NewGuid();
+
+        // Store provider (with email + tenant)
+        var provider = new Provider(uniqueName, displayName, providerEmail, tenantId);
         await _providers.CreateAsync(provider, ct);
 
-        // Auto-generate admin user details
-        var adminUsername = providerId + _opts.ProviderAdminUsernameSuffix;
-        var adminEmail = $"{adminUsername}@{_opts.ProviderAdminEmailDomain}";
+        var envName = _env.EnvironmentName.ToLowerInvariant();
+
+        var infra = await _infra.EnsureTenantDatabasesAsync(uniqueName, envName, ct);
+
+        // Provider admin user
+        var adminUsername = uniqueName + _opts.ProviderAdminUsernameSuffix;
+
+        // IMPORTANT: use the admin-provided email
+        var adminEmail = providerEmail;
+
         var tempPassword = GenerateTempPassword(_opts.TemporaryPasswordLength);
 
-        // Create/Update Keycloak (real)
         await _keycloak.EnsureProviderAdminUserAsync(
-            providerId: providerId,
+            uniqueName: uniqueName,
             displayName: displayName,
             adminUsername: adminUsername,
             adminEmail: adminEmail,
+            tenantId: tenantId.ToString(),
             temporaryPassword: tempPassword,
             ct: ct);
 
-        // Payload only (no envelope fields here)
-        var payload = new ProviderProvisioned
+        // 3) Publish event: "Tenant created, DBs ready, run migrations"
+        var payload = new ProviderProvisionedV2
         {
-            ProviderId = providerId,
+            TenantId = tenantId,
+            ProviderUniqueName = uniqueName,
             DisplayName = displayName,
-            Environment = _env.EnvironmentName.ToLowerInvariant(),
-            TenantServices = TenantServices.ToList(),
-            KeycloakAdminUsername = adminUsername,
-            KeycloakAdminEmail = adminEmail
+            Environment = envName,
+            ConnectionSecretNames = infra.ConnectionSecretNames,
+            DatabaseNames = infra.DatabaseNames
         };
 
-        // Publish using envelope pattern (partner-aligned)
-        var topic = string.IsNullOrWhiteSpace(_kafka.TenantEventsTopic)
-            ? "tenant.events"
-            : _kafka.TenantEventsTopic;
+        var topic = string.IsNullOrWhiteSpace(_kafka.TenantEventsTopic) ? "tenant.events" : _kafka.TenantEventsTopic;
 
         await _events.PublishAsync(
             topic: topic,
-            eventType: "ProviderProvisioned",
-            key: providerId,
+            eventType: "ProviderProvisionedV2",
+            key: uniqueName,
             payload: payload,
             ct: ct);
 
-        return new RegisterProviderResult(providerId, displayName, adminUsername, adminEmail, tempPassword);
+        // Return temp password only in HTTP response (not Kafka)
+        return new RegisterProviderResult(uniqueName, tenantId, displayName, adminUsername, adminEmail, tempPassword);
     }
 
     private static string GenerateTempPassword(int length)
     {
-        // URL-safe-ish base64, trimmed to length; good enough for MVP.
         var bytes = RandomNumberGenerator.GetBytes(Math.Max(24, length));
-        var b64 = Convert.ToBase64String(bytes)
-            .Replace('+', 'A')
-            .Replace('/', 'B')
-            .Replace("=", "");
-
+        var b64 = Convert.ToBase64String(bytes).Replace('+', 'A').Replace('/', 'B').Replace("=", "");
         var s = b64.Length >= length ? b64[..length] : (b64 + b64)[..length];
-
-        // Ensure variety
         if (!s.Any(char.IsUpper)) s = "A" + s[1..];
         if (!s.Any(char.IsLower)) s = s[..^1] + "a";
         if (!s.Any(char.IsDigit)) s = s[..^2] + "1" + s[^1];
         if (!s.Contains('!')) s = s[..^1] + "!";
-
         return s;
     }
 }

@@ -1,7 +1,8 @@
 namespace UserService.Application.Providers.RegisterProvider;
 
 public sealed record RegisterProviderResult(
-    string ProviderId,
+    string UniqueName,
+    Guid TenantId,
     string DisplayName,
     string AdminUsername,
     string AdminEmail,

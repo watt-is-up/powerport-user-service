@@ -1,13 +1,16 @@
-namespace UserService.Domain.Providers;
-
-public sealed class ProviderProvisioned
+namespace UserService.Domain.Providers
 {
-    public string ProviderId { get; set; } = default!;
-    public string DisplayName { get; set; } = default!;
-    public string Environment { get; set; } = default!;
-    public List<string> TenantServices { get; set; } = new();
+    public sealed class ProviderProvisionedV2
+    {
+        public Guid TenantId { get; init; }
+        public string ProviderUniqueName { get; init; } = "";
+        public string DisplayName { get; init; } = "";
+        public string Environment { get; init; } = "dev";
 
-    // Optional: helpful for ops
-    public string KeycloakAdminUsername { get; set; } = default!;
-    public string KeycloakAdminEmail { get; set; } = default!;
+        // Prefer secrets over db names (services can fetch conn string via secret name)
+        public Dictionary<string, string> ConnectionSecretNames { get; init; } = new();
+
+        // Optional if you want
+        public Dictionary<string, string>? DatabaseNames { get; init; }
+    }
 }
