@@ -17,7 +17,7 @@ public sealed class ProvidersController : ControllerBase
         CancellationToken ct)
     {
         var result = await _svc.RegisterProviderAsync(request, ct);
-        return Created($"/api/providers/{result.ProviderId}", result);
+        return Created($"/api/providers/{result.DisplayName}", result);
     }
 }
 

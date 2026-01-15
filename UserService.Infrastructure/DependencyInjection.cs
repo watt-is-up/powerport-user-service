@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using UserService.Application.Abstractions;
+using UserService.Application.Providers.RegisterProvider;
 using UserService.Infrastructure.Kafka;
 using UserService.Infrastructure.Keycloak;
 using UserService.Infrastructure.Providers;
@@ -23,6 +24,7 @@ public static class DependencyInjection
         // Keycloak admin API client
         services.AddHttpClient<IKeycloakProvisioningClient, KeycloakProvisioningClient>();
 
+        services.AddScoped<ITenantInfraProvisioner, TenantInfraProvisioner>();
         return services;
     }
 }

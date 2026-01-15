@@ -1,3 +1,4 @@
+using UserService.Application.Configuration;
 using UserService.Application.Providers.RegisterProvider;
 using UserService.Infrastructure;
 
@@ -18,7 +19,12 @@ namespace UserService.Api
 
             // Clean architecture wiring
             builder.Services.AddInfrastructure(builder.Configuration);
+
+            builder.Services.Configure<TenantProvisioningOptions>(builder.Configuration.GetSection("TenantProvisioning"));
+            builder.Services.AddScoped<ITenantInfraProvisioner, TenantInfraProvisioner>();
+
             builder.Services.AddScoped<IProviderProvisioningService, ProviderProvisioningService>();
+
 
             var app = builder.Build();
 

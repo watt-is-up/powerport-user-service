@@ -27,12 +27,13 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
     }
 
     public async Task EnsureProviderAdminUserAsync(
-        string providerId,
-        string displayName,
-        string adminUsername,
-        string adminEmail,
-        string temporaryPassword,
-        CancellationToken ct)
+    string uniqueName,
+    string displayName,
+    string adminUsername,
+    string adminEmail,
+    string tenantId,
+    string temporaryPassword,
+    CancellationToken ct)
     {
         var token = await GetAdminAccessTokenAsync(ct);
         _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -40,12 +41,12 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         var userId = await FindUserIdByUsernameAsync(_opts.Realm, adminUsername, ct);
         if (userId is null)
         {
-            userId = await CreateUserAsync(_opts.Realm, providerId, adminUsername, adminEmail, ct);
+            userId = await CreateUserAsync(_opts.Realm, tenantId, adminUsername, adminEmail, displayName, ct);
             _logger.LogInformation("Keycloak: created user {Username} id={UserId}", adminUsername, userId);
         }
         else
         {
-            await UpdateUserAsync(_opts.Realm, userId, providerId, adminUsername, adminEmail, ct);
+            await UpdateUserAsync(_opts.Realm, userId, tenantId, adminUsername, adminEmail, displayName, ct);
             _logger.LogInformation("Keycloak: updated user {Username} id={UserId}", adminUsername, userId);
         }
 
@@ -229,9 +230,13 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         [JsonPropertyName("emailVerified")]
         public bool EmailVerified { get; set; }
 
+        [JsonPropertyName("firstName")]
+        public string? FirstName { get; set; }
+
         [JsonPropertyName("attributes")]
         public Dictionary<string, string[]>? Attributes { get; set; }
     }
+
 
     // -------- password / required actions --------
     private async Task SetPasswordAsync(string realm, string userId, string password, bool temporary, CancellationToken ct)

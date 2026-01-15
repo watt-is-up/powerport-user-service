@@ -4,4 +4,6 @@ public sealed class RegisterProviderRequest
 {
     public Guid ProviderId { get; set; } = default!;
     public string DisplayName { get; set; } = "";
+    public string ProviderEmail { get; set; } = "";
 }
+
