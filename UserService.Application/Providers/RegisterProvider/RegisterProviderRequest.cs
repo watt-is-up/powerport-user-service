@@ -2,8 +2,9 @@ namespace UserService.Application.Providers.RegisterProvider;
 
 public sealed class RegisterProviderRequest
 {
-    public Guid ProviderId { get; set; } = default!;
-    public string DisplayName { get; set; } = "";
+    public Guid? ProviderId { get; set; } = default!;
+    public string? DisplayName { get; set; } = "";
+    public string UniqueName { get; set; } = "";
     public string ProviderEmail { get; set; } = "";
 }
 

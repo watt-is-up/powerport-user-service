@@ -36,8 +36,9 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
 
     public async Task<RegisterProviderResult> RegisterProviderAsync(RegisterProviderRequest request, CancellationToken ct)
     {
-        var providerId = request.ProviderId.ToString();
+        var providerId = request.ProviderId;
         var displayName = (request.DisplayName ?? "").Trim();
+        var uniqueName = (request.UniqueName ?? "").Trim();
         var providerEmail = (request.ProviderEmail ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(uniqueName)) throw new ArgumentException("uniqueName is required");
@@ -47,7 +48,7 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
         if (await _providers.ExistsAsync(uniqueName, ct))
             throw new InvalidOperationException($"Provider '{uniqueName}' already exists.");
 
-        var tenantId = Guid.NewGuid();
+        var tenantId = providerId ?? Guid.NewGuid();
 
         // Store provider (with email + tenant)
         var provider = new Provider(uniqueName, displayName, providerEmail, tenantId);
@@ -55,7 +56,9 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
 
         var envName = _env.EnvironmentName.ToLowerInvariant();
 
-        var infra = await _infra.EnsureTenantDatabasesAsync(uniqueName, envName, ct);
+        // ============== IMPORTANT ==============
+        // var infra = await _infra.EnsureTenantDatabasesAsync(uniqueName, envName, ct);
+        // =======================================
 
         // Provider admin user
         var adminUsername = uniqueName + _opts.ProviderAdminUsernameSuffix;
@@ -81,8 +84,10 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
             ProviderUniqueName = uniqueName,
             DisplayName = displayName,
             Environment = envName,
-            ConnectionSecretNames = infra.ConnectionSecretNames,
-            DatabaseNames = infra.DatabaseNames
+            // ConnectionSecretNames = infra.ConnectionSecretNames,
+            // DatabaseNames = infra.DatabaseNames
+            ConnectionSecretNames = new Dictionary<string, string> { { "service-placeholder", "secret-placeholder" } },
+            DatabaseNames = new Dictionary<string, string> { { "service-placeholder", "db-placeholder" } }
         };
 
         // Publish using envelope pattern (partner-aligned)

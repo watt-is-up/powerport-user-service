@@ -41,12 +41,12 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         var userId = await FindUserIdByUsernameAsync(_opts.Realm, adminUsername, ct);
         if (userId is null)
         {
-            userId = await CreateUserAsync(_opts.Realm, tenantId, adminUsername, adminEmail, displayName, ct);
+            userId = await CreateUserAsync(_opts.Realm, tenantId, adminUsername, adminEmail, ct);
             _logger.LogInformation("Keycloak: created user {Username} id={UserId}", adminUsername, userId);
         }
         else
         {
-            await UpdateUserAsync(_opts.Realm, userId, tenantId, adminUsername, adminEmail, displayName, ct);
+            await UpdateUserAsync(_opts.Realm, userId, tenantId, adminUsername, adminEmail, ct);
             _logger.LogInformation("Keycloak: updated user {Username} id={UserId}", adminUsername, userId);
         }
 
