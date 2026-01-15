@@ -54,9 +54,9 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         if (_opts.ForcePasswordUpdateOnFirstLogin)
             await SetRequiredActionsAsync(_opts.Realm, userId, new[] { "UPDATE_PASSWORD" }, ct);
 
-        await EnsureRealmRoleAssignedAsync(_opts.Realm, userId, _opts.ProviderRoleName, ct);
+        await EnsureRealmRoleAssignedAsync(_opts.Realm, userId, _opts.UserRole, ct);
     }
-
+    
     // -------- token --------
     private async Task<string> GetAdminAccessTokenAsync(CancellationToken ct)
     {
@@ -110,9 +110,31 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         return users.FirstOrDefault()?.Id;
     }
 
-    private async Task<string> CreateUserAsync(string realm, string providerId, string username, string email, CancellationToken ct)
+    private string ResolveTenantId(string? providerId)
+    {
+        return !string.IsNullOrWhiteSpace(providerId)
+            ? providerId
+            : _opts.DefaultTenantId;
+    }
+
+
+    private async Task<string> CreateUserAsync(string realm, string? providerId, string username, string email, CancellationToken ct)
     {
         var url = $"{_opts.BaseUrl}/admin/realms/{realm}/users";
+
+        var tenantId = ResolveTenantId(providerId);
+        var role = providerId is not null ? "Provider" : "User";
+
+        var attributes = new Dictionary<string, string[]>
+        {
+            [_opts.TenantIdAttributeName] = new[] { tenantId },
+            [_opts.UserRole] = new[] { role }
+        };
+
+        if (!string.IsNullOrWhiteSpace(providerId))
+        {
+            attributes[_opts.ProviderIdAttributeName] = new[] { providerId };
+        }
 
         var rep = new UserRep
         {
@@ -120,10 +142,7 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
             Enabled = true,
             Email = email,
             EmailVerified = _opts.RequireEmailVerified,
-            Attributes = new Dictionary<string, string[]>
-            {
-                [_opts.ProviderIdAttributeName] = new[] { providerId }
-            }
+            Attributes = attributes,
         };
 
         using var resp = await _http.PostAsJsonAsync(url, rep, JsonOpts, ct);
@@ -135,12 +154,45 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         if (resp.Headers.Location is null)
             throw new InvalidOperationException("Keycloak create user missing Location header");
 
+        _logger.LogInformation("Keycloak create user successful: \n{User}", rep.ToString());
+
         return resp.Headers.Location.ToString().Split('/').Last();
     }
 
-    private async Task UpdateUserAsync(string realm, string userId, string providerId, string username, string email, CancellationToken ct)
+    private async Task UpdateUserAsync(
+        string realm,
+        string userId,
+        string? providerId,
+        string username,
+        string email,
+        CancellationToken ct)
     {
         var url = $"{_opts.BaseUrl}/admin/realms/{realm}/users/{userId}";
+
+        // Fetch current user to preserve immutable attributes (e.g. userId)
+        var current = await GetUserAsync(realm, userId, ct);
+
+        var tenantId = ResolveTenantId(providerId);
+        var role = providerId is not null ? "provider" : "user";
+
+        current.Attributes ??= new Dictionary<string, string[]>();
+
+        // providerId (optional)
+        if (!string.IsNullOrWhiteSpace(providerId))
+        {
+            current.Attributes[_opts.ProviderIdAttributeName] = new[] { providerId };
+        }
+        else
+        {
+            current.Attributes.Remove(_opts.ProviderIdAttributeName);
+        }
+
+        // tenantId (always set)
+        current.Attributes[_opts.TenantIdAttributeName] = new[] { tenantId };
+
+        // role (always set)
+        current.Attributes[_opts.UserRole] = new[] { role };
+
         var rep = new UserRep
         {
             Id = userId,
@@ -148,18 +200,17 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
             Enabled = true,
             Email = email,
             EmailVerified = _opts.RequireEmailVerified,
-            Attributes = new Dictionary<string, string[]>
-            {
-                [_opts.ProviderIdAttributeName] = new[] { providerId }
-            }
+            Attributes = current.Attributes
         };
 
         using var resp = await _http.PutAsJsonAsync(url, rep, JsonOpts, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
 
         if (!resp.IsSuccessStatusCode)
-            throw new InvalidOperationException($"Keycloak update user failed ({(int)resp.StatusCode}): {body}");
+            throw new InvalidOperationException(
+                $"Keycloak update user failed ({(int)resp.StatusCode}): {body}");
     }
+
 
     private sealed class UserRep
     {

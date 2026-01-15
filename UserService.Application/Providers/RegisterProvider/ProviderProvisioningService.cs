@@ -43,7 +43,7 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
 
     public async Task<RegisterProviderResult> RegisterProviderAsync(RegisterProviderRequest request, CancellationToken ct)
     {
-        var providerId = (request.ProviderId ?? "").Trim().ToLowerInvariant();
+        var providerId = request.ProviderId.ToString();
         var displayName = (request.DisplayName ?? "").Trim();
 
         if (string.IsNullOrWhiteSpace(providerId))
@@ -83,10 +83,11 @@ public sealed class ProviderProvisioningService : IProviderProvisioningService
         };
 
         // Publish using envelope pattern (partner-aligned)
-        var topic = string.IsNullOrWhiteSpace(_kafka.TenantEventsTopic)
-            ? "tenant.events"
-            : _kafka.TenantEventsTopic;
+        var topic = string.IsNullOrWhiteSpace(_kafka.UserServiceTopic)
+            ? "user.events"
+            : _kafka.UserServiceTopic;
 
+        // [TODO] - Publish TenantId along with the newly created User
         await _events.PublishAsync(
             topic: topic,
             eventType: "ProviderProvisioned",

@@ -20,3 +20,5 @@ public sealed class ProvidersController : ControllerBase
         return Created($"/api/providers/{result.ProviderId}", result);
     }
 }
+
+// [TODO] - Make a copy of this controller for Users
