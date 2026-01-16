@@ -55,7 +55,7 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         if (_opts.ForcePasswordUpdateOnFirstLogin)
             await SetRequiredActionsAsync(_opts.Realm, userId, new[] { "UPDATE_PASSWORD" }, ct);
 
-        await EnsureRealmRoleAssignedAsync(_opts.Realm, userId, _opts.UserRole, ct);
+        await EnsureRealmRoleAssignedAsync(_opts.Realm, userId, _opts.ProviderRoleName, ct);
     }
     
     // -------- token --------
@@ -132,11 +132,6 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
             [_opts.UserRole] = new[] { role }
         };
 
-        if (!string.IsNullOrWhiteSpace(providerId))
-        {
-            attributes[_opts.ProviderIdAttributeName] = new[] { providerId };
-        }
-
         var rep = new UserRep
         {
             Username = username,
@@ -177,16 +172,6 @@ public sealed class KeycloakProvisioningClient : IKeycloakProvisioningClient
         var role = providerId is not null ? "provider" : "user";
 
         current.Attributes ??= new Dictionary<string, string[]>();
-
-        // providerId (optional)
-        if (!string.IsNullOrWhiteSpace(providerId))
-        {
-            current.Attributes[_opts.ProviderIdAttributeName] = new[] { providerId };
-        }
-        else
-        {
-            current.Attributes.Remove(_opts.ProviderIdAttributeName);
-        }
 
         // tenantId (always set)
         current.Attributes[_opts.TenantIdAttributeName] = new[] { tenantId };

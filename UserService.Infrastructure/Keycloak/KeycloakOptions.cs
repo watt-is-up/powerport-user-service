@@ -17,7 +17,8 @@ public sealed class KeycloakOptions
 
     // Role + attribute conventions
     public string UserRole { get; set; } = default!;
-    public string ProviderIdAttributeName { get; set; } = default!;
+    public string ProviderRoleName { get; set; } = default!;
+
     public string TenantIdAttributeName { get; set; } = default!;
 
     public string DefaultTenantId { get; set; } = "11111111-1111-1111-1111-111111111111";
